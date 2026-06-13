@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CBT Sekolah - Starter</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14"></script>
+  <style>
+    body { background: #0b1020; }
+    .glass { background: rgba(255,255,255,.06); backdrop-filter: blur(10px); }
+    .hiddenx { display:none; }
+    video, canvas { border-radius: 1rem; }
+  </style>
+</head>
+<body class="text-white min-h-screen">
+  <div class="max-w-7xl mx-auto p-4 md:p-8">
+    <header class="flex flex-col md:flex-row md:items-end md:justify-between gap-3 mb-6">
+      <div>
+        <h1 class="text-3xl md:text-4xl font-bold">CBT Sekolah</h1>
+        <p class="text-slate-300 mt-1">Login NIS, ujian fullscreen, kamera aktif, dan log pelanggaran.</p>
+      </div>
+      <div class="text-sm text-slate-300 glass rounded-2xl px-4 py-3 border border-white/10">
+        <div id="statusText">Status: Menunggu login</div>
+        <div id="timerText">Timer: -</div>
+      </div>
+    </header>
+
+    <section id="loginScreen" class="grid md:grid-cols-2 gap-6 items-start">
+      <div class="glass border border-white/10 rounded-3xl p-6 shadow-2xl">
+        <h2 class="text-2xl font-semibold mb-4">Login Siswa</h2>
+        <label class="block mb-3">
+          <span class="text-sm text-slate-300">Username / NIS</span>
+          <input id="nisInput" class="mt-1 w-full rounded-xl bg-slate-900 border border-white/10 px-4 py-3 outline-none" placeholder="Masukkan NIS" />
+        </label>
+        <label class="block mb-5">
+          <span class="text-sm text-slate-300">Password</span>
+          <input id="passInput" type="password" class="mt-1 w-full rounded-xl bg-slate-900 border border-white/10 px-4 py-3 outline-none" placeholder="Password = NIS (awal)" />
+        </label>
+        <button id="loginBtn" class="w-full rounded-xl bg-blue-600 hover:bg-blue-500 px-4 py-3 font-semibold">Masuk Ujian</button>
+        <p class="text-xs text-slate-400 mt-3">Catatan: password awal dapat disamakan dengan NIS lalu diganti saat login pertama.</p>
+      </div>
+
+      <div class="glass border border-white/10 rounded-3xl p-6 shadow-2xl">
+        <h2 class="text-2xl font-semibold mb-4">Contoh Data Siswa</h2>
+        <div class="overflow-auto rounded-2xl border border-white/10">
+          <table class="w-full text-left text-sm">
+            <thead class="bg-white/5 text-slate-300">
+              <tr><th class="p-3">NIS</th><th class="p-3">Nama</th><th class="p-3">Kelas</th></tr>
+            </thead>
+            <tbody id="studentTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="examScreen" class="hiddenx grid lg:grid-cols-[1.4fr_.9fr] gap-6">
+      <div class="glass border border-white/10 rounded-3xl p-6 shadow-2xl">
+        <div class="flex items-center justify-between gap-3 mb-4">
+          <div>
+            <h2 class="text-2xl font-semibold">Halaman Ujian</h2>
+            <p id="studentInfo" class="text-slate-300 text-sm mt-1"></p>
+          </div>
+          <button id="fullscreenBtn" class="rounded-xl bg-slate-800 hover:bg-slate-700 px-4 py-3 text-sm font-semibold">Fullscreen</button>
+        </div>
+
+        <div class="rounded-2xl border border-white/10 p-4 mb-4 bg-black/20">
+          <div class="text-slate-300 text-sm mb-2">Soal</div>
+          <div id="questionText" class="text-lg font-medium mb-4">Memuat soal...</div>
+          <div id="optionsList" class="grid gap-3"></div>
+        </div>
+
+        <div class="flex items-center justify-between gap-3">
+          <button id="prevBtn" class="rounded-xl bg-slate-800 hover:bg-slate-700 px-4 py-3 font-semibold">Sebelumnya</button>
+          <button id="nextBtn" class="rounded-xl bg-blue-600 hover:bg-blue-500 px-4 py-3 font-semibold">Berikutnya</button>
+        </div>
+      </div>
+
+      <div class="space-y-6">
+        <div class="glass border border-white/10 rounded-3xl p-6 shadow-2xl">
+          <h3 class="text-xl font-semibold mb-3">Kamera Pengawas</h3>
+          <video id="webcam" autoplay playsinline muted class="w-full bg-black"></video>
+          <canvas id="snapshotCanvas" class="hiddenx"></canvas>
+          <div class="flex items-center gap-3 mt-4 flex-wrap">
+            <button id="startCamBtn" class="rounded-xl bg-emerald-600 hover:bg-emerald-500 px-4 py-3 font-semibold">Aktifkan Kamera</button>
+            <button id="takePhotoBtn" class="rounded-xl bg-slate-800 hover:bg-slate-700 px-4 py-3 font-semibold">Ambil Foto</button>
+          </div>
+        </div>
+
+        <div class="glass border border-white/10 rounded-3xl p-6 shadow-2xl">
+          <h3 class="text-xl font-semibold mb-3">Log Pelanggaran</h3>
+          <div id="violationList" class="space-y-3 text-sm text-slate-200"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="adminScreen" class="hiddenx mt-6 glass border border-white/10 rounded-3xl p-6 shadow-2xl">
+      <div class="flex items-center justify-between gap-3 mb-4">
+        <h2 class="text-2xl font-semibold">Panel Admin / Guru</h2>
+        <button id="refreshAdminBtn" class="rounded-xl bg-slate-800 hover:bg-slate-700 px-4 py-3 font-semibold">Refresh</button>
+      </div>
+      <div class="overflow-auto rounded-2xl border border-white/10">
+        <table class="w-full text-left text-sm">
+          <thead class="bg-white/5 text-slate-300">
+            <tr>
+              <th class="p-3">Waktu</th><th class="p-3">NIS</th><th class="p-3">Nama</th><th class="p-3">Jenis Pelanggaran</th><th class="p-3">Bukti Foto</th>
+            </tr>
+          </thead>
+          <tbody id="adminTable"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+<script>
+  // ====== DATA CONTOH ======
+  const students = [
+    { nis: '1001', name: 'Andi Saputra', class: 'XI TKJ 1', password: '1001' },
+    { nis: '1002', name: 'Siti Aulia', class: 'XI TKJ 1', password: '1002' },
+    { nis: '1003', name: 'Budi Hartono', class: 'XI TKJ 2', password: '1003' },
+  ];
+
+  const questions = [
+    { q: 'Apa kepanjangan dari LAN?', a: ['Local Area Network', 'Long Access Node', 'Link Area Name', 'Local Audio Network'], c: 0 },
+    { q: 'Perangkat yang menghubungkan jaringan disebut...', a: ['Router', 'Monitor', 'Speaker', 'Keyboard'], c: 0 },
+    { q: 'Kabel yang umum dipakai untuk jaringan lokal adalah...', a: ['UTP', 'USB', 'HDMI', 'VGA'], c: 0 },
+  ];
+
+  const state = {
+    currentStudent: null,
+    currentQuestion: 0,
+    violations: JSON.parse(localStorage.getItem('violations') || '[]')
+  };
+
+  const el = id => document.getElementById(id);
+  const saveViolations = () => localStorage.setItem('violations', JSON.stringify(state.violations));
+
+  function renderStudents() {
+    el('studentTable').innerHTML = students.map(s => `
+      <tr class="border-t border-white/10">
+        <td class="p-3">${s.nis}</td>
+        <td class="p-3">${s.name}</td>
+        <td class="p-3">${s.class}</td>
+      </tr>
+    `).join('');
+  }
+
+  function renderQuestion() {
+    const item = questions[state.currentQuestion];
+    el('questionText').textContent = `${state.currentQuestion + 1}. ${item.q}`;
+    el('optionsList').innerHTML = item.a.map((opt, idx) => `
+      <label class="flex items-center gap-3 rounded-xl border border-white/10 p-3 bg-white/5 hover:bg-white/10 cursor-pointer">
+        <input type="radio" name="answer" value="${idx}" class="scale-125" />
+        <span>${opt}</span>
+      </label>
+    `).join('');
+  }
+
+  function renderAdmin() {
+    el('adminTable').innerHTML = state.violations.slice().reverse().map(v => `
+      <tr class="border-t border-white/10 align-top">
+        <td class="p-3 whitespace-nowrap">${v.time}</td>
+        <td class="p-3">${v.nis}</td>
+        <td class="p-3">${v.name}</td>
+        <td class="p-3">${v.type}</td>
+        <td class="p-3">${v.photo ? `<img src="${v.photo}" class="w-28 rounded-lg border border-white/10" />` : '-'}</td>
+      </tr>
+    `).join('') || `<tr><td class="p-3 text-slate-400" colspan="5">Belum ada pelanggaran.</td></tr>`;
+  }
+
+  function addViolation(type, photo = '') {
+    if (!state.currentStudent) return;
+    const entry = {
+      time: new Date().toLocaleString('id-ID'),
+      nis: state.currentStudent.nis,
+      name: state.currentStudent.name,
+      type,
+      photo
+    };
+    state.violations.push(entry);
+    saveViolations();
+    renderAdmin();
+    const row = document.createElement('div');
+    row.className = 'rounded-xl border border-red-400/20 bg-red-500/10 p-3';
+    row.textContent = `${entry.time} - ${entry.type}`;
+    el('violationList').prepend(row);
+  }
+
+  async function startCamera() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+      el('webcam').srcObject = stream;
+      el('statusText').textContent = 'Status: Kamera aktif';
+    } catch (err) {
+      addViolation('Kamera gagal diaktifkan');
+      alert('Kamera tidak dapat diakses.');
+    }
+  }
+
+  function snapshot() {
+    const video = el('webcam');
+    const canvas = el('snapshotCanvas');
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/jpeg', 0.8);
+  }
+
+  function enterFullscreen() {
+    const root = document.documentElement;
+    if (root.requestFullscreen) root.requestFullscreen();
+  }
+
+  function startExam(student) {
+    state.currentStudent = student;
+    el('loginScreen').classList.add('hiddenx');
+    el('examScreen').classList.remove('hiddenx');
+    el('adminScreen').classList.remove('hiddenx');
+    el('studentInfo').textContent = `${student.name} | NIS: ${student.nis} | Kelas: ${student.class}`;
+    el('statusText').textContent = 'Status: Ujian dimulai';
+    renderQuestion();
+    renderAdmin();
+    enterFullscreen();
+    startCamera();
+  }
+
+  el('loginBtn').addEventListener('click', () => {
+    const nis = el('nisInput').value.trim();
+    const pw = el('passInput').value.trim();
+    const student = students.find(s => s.nis === nis && s.password === pw);
+    if (!student) {
+      alert('NIS atau password salah.');
+      return;
+    }
+    startExam(student);
+  });
+
+  el('startCamBtn').addEventListener('click', startCamera);
+  el('takePhotoBtn').addEventListener('click', () => {
+    const img = snapshot();
+    addViolation('Foto manual diambil', img);
+  });
+  el('fullscreenBtn').addEventListener('click', enterFullscreen);
+  el('refreshAdminBtn').addEventListener('click', renderAdmin);
+  el('nextBtn').addEventListener('click', () => {
+    state.currentQuestion = Math.min(state.currentQuestion + 1, questions.length - 1);
+    renderQuestion();
+  });
+  el('prevBtn').addEventListener('click', () => {
+    state.currentQuestion = Math.max(state.currentQuestion - 1, 0);
+    renderQuestion();
+  });
+
+  // ====== DETEKSI PELANGGARAN DASAR ======
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && state.currentStudent) {
+      addViolation('Pindah tab / aplikasi', snapshot());
+    }
+  });
+
+  window.addEventListener('blur', () => {
+    if (state.currentStudent) addViolation('Keluar dari fokus ujian', snapshot());
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (!state.currentStudent) return;
+    if (['F12', 'PrintScreen'].includes(e.key) || (e.ctrlKey && ['u', 's', 'p', 'c', 'x', 'v'].includes(e.key.toLowerCase()))) {
+      e.preventDefault();
+      addViolation(`Tombol terlarang: ${e.key}`);
+    }
+  });
+
+  // Deteksi sederhana untuk 2 wajah / objek HP sebaiknya memakai model AI di backend atau TensorFlow.js.
+  // Stub berikut hanya tempat menempelkan integrasi AI.
+  async function aiProctoringStub() {
+    // Kirim frame ke server / model AI untuk deteksi:
+    // - lebih dari 1 wajah
+    // - wajah hilang
+    // - ponsel terdeteksi
+    // Jika terdeteksi, panggil addViolation('...')
+  }
+
+  setInterval(() => {
+    if (state.currentStudent) {
+      aiProctoringStub();
+    }
+  }, 5000);
+
+  // Timer contoh
+  let remaining = 60 * 30;
+  setInterval(() => {
+    if (!state.currentStudent) return;
+    remaining = Math.max(0, remaining - 1);
+    const m = String(Math.floor(remaining / 60)).padStart(2, '0');
+    const s = String(remaining % 60).padStart(2, '0');
+    el('timerText').textContent = `Timer: ${m}:${s}`;
+    if (remaining === 0) addViolation('Waktu ujian habis');
+  }, 1000);
+
+  renderStudents();
+  renderAdmin();
+</script>
+</body>
+</html>
